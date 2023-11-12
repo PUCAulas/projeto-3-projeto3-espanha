@@ -857,3 +857,650 @@ public class Biblioteca implements Emprestimo {
     }
     
 }
+
+  public void emprestar() {
+        Scanner scanner = new Scanner(System.in);
+
+        // Solicitar ID, título e tipo do item ao usuário
+        System.out.print("Digite o ID do usuário: ");
+        String idUsuario = scanner.nextLine();
+        System.out.print("Digite o título do item que deseja emprestar: ");
+        String tituloItem = scanner.nextLine();
+        System.out.print("Digite o tipo do item (Livro, CD ou DVD): ");
+        String tipoItem = scanner.nextLine();
+
+        scanner.close();
+
+        // Verificar se o usuário possui empréstimos em atraso
+        if (temEmprestimoEmAtraso(idUsuario)) {
+            System.out.println("\n ALERTA: Você possui empréstimos em atraso e não pode pegar novos itens no momento. \n");
+            return;
+        }
+
+        // Verificar se o usuário atingiu o limite de 3 empréstimos simultâneos
+        if (contarEmprestimosAtuais(idUsuario) >= 3) {
+            System.out.println("\n ALERTA: Você já atingiu o limite de 3 empréstimos simultâneos. \n ");
+            return;
+        }
+
+        // Verificar a disponibilidade do item
+        if (!verificarDisponibilidade(tituloItem)) {
+            System.out.println("\n ALERTA: O item não está disponível para empréstimo. \n ");
+            return;
+        }
+
+        if (!usuarioRegistradoNoArquivo(idUsuario)) {
+            System.out.println("\n ALERTA: Usuário não registrado na biblioteca. \n");
+            return;
+        }
+
+        // Registrar o empréstimo com base no tipo do item
+        if (tipoItem.equalsIgnoreCase("Livro")) {
+            registrarEmprestimo(idUsuario, tituloItem);
+            diminuirQuantidadeLivros(tituloItem);
+        } else if (tipoItem.equalsIgnoreCase("CD")) {
+            registrarEmprestimo(idUsuario, tituloItem);
+            diminuirQuantidadeCD(tituloItem);
+        } else if (tipoItem.equalsIgnoreCase("DVD")) {
+            registrarEmprestimo(idUsuario, tituloItem);
+            diminuirQuantidadeDVD(tituloItem);
+        } else {
+            System.out.println("\n ALERTA: Tipo de item inválido. Use 'Livro', 'CD' ou 'DVD'.\n ");
+        }
+
+    }
+
+    public boolean usuarioRegistradoNoArquivo(String idUsuario) {
+        try (BufferedReader reader = new BufferedReader(new FileReader("usuarios.txt"))) {
+            String linha;
+            while ((linha = reader.readLine()) != null) {
+                String[] partes = linha.split(";");
+                if (partes.length == 3) {
+                    String id = partes[2];
+                    if (id.equals(idUsuario)) {
+                        return true;
+                    }
+                }
+            }
+        } catch (IOException e) {
+            System.err.println("Erro ao verificar registro do usuário: " + e.getMessage());
+        }
+        return false;
+    }
+
+    private void registrarEmprestimo(String idUsuario, String tituloItem) {
+        SimpleDateFormat dateFormat = new SimpleDateFormat("dd/MM/yyyy");
+        String dataEmprestimo = dateFormat.format(new Date());
+
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter("emprestimos.txt", true))) {
+            writer.write(String.format("%s;%s;%s;Pendente", idUsuario, dataEmprestimo, tituloItem));
+            writer.newLine();
+        } catch (IOException e) {
+            System.err.println("Erro ao registrar o empréstimo: " + e.getMessage());
+        }
+    }
+
+    public boolean verificarDisponibilidade(String tituloItem) {
+        System.out.println("Verificando disponibilidade do item: " + tituloItem);
+
+        boolean disponibilidadeEncontrada = false;
+
+        disponibilidadeEncontrada = verificarDisponibilidadeArquivo("livros.txt", tituloItem, "Livro")
+                || disponibilidadeEncontrada;
+        disponibilidadeEncontrada = verificarDisponibilidadeArquivo("cds.txt", tituloItem, "CD")
+                || disponibilidadeEncontrada;
+        disponibilidadeEncontrada = verificarDisponibilidadeArquivo("dvds.txt", tituloItem, "DVD")
+                || disponibilidadeEncontrada;
+
+        return disponibilidadeEncontrada;
+    }
+
+    private boolean verificarDisponibilidadeArquivo(String nomeArquivo, String tituloItem, String tipo) {
+        try (BufferedReader reader = new BufferedReader(new FileReader(nomeArquivo))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String[] parts = line.split(";");
+                if (parts.length == 4 && parts[0].equalsIgnoreCase(tituloItem)) {
+                    int exemplaresDisponiveis = Integer.parseInt(parts[3]);
+
+                    if (exemplaresDisponiveis > 1) {
+                        System.out.println("Há mais de um exemplar disponível de " + tipo + " '" + tituloItem + "'.");
+                        return true;
+                    } else {
+                        System.out.println("\n ALERTA: Apenas um exemplar disponível de " + tipo + " '" + tituloItem + "'. \n");
+                        return false;
+                    }
+                }
+            }
+            // Se o loop terminar e não encontrar o item, significa que não existe.
+            System.out.println(tipo + " '" + tituloItem + "' não encontrado no arquivo " + nomeArquivo + ".");
+            return false;
+        } catch (IOException e) {
+            System.err.println("Erro ao ler o arquivo " + nomeArquivo + ": " + e.getMessage());
+            return false;
+        }
+    }
+
+    public boolean temEmprestimoEmAtraso(String idUsuario) {
+        LocalDate dataAtual = LocalDate.now();
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+    
+        try (BufferedReader reader = new BufferedReader(new FileReader("emprestimos.txt"))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String[] parts = line.split(";");
+                if (parts.length == 4 && parts[0].equals(idUsuario)) {
+                    String dataEmprestimoStr = parts[1];
+                    LocalDate dataEmprestimo = LocalDate.parse(dataEmprestimoStr, formatter);
+    
+                    String status = parts[3];
+                    if (status.equals("Pendente")) {
+                        // Calcule a diferença em dias entre a data atual e a data de empréstimo.
+                        long diferencaDias = dataEmprestimo.until(dataAtual).getDays();
+    
+                        if (diferencaDias > 10) {
+                            // Empréstimo em atraso, retorne true.
+                            return true;
+                        }
+                    }
+                }
+            }
+        } catch (IOException e) {
+            System.err.println("Erro ao ler o arquivo emprestimos.txt: " + e.getMessage());
+        }
+    
+        // Se nenhum empréstimo em atraso for encontrado, retorne false.
+        return false;
+    }
+
+    public int contarEmprestimosAtuais(String idUsuario) {
+        int emprestimosAtuais = 0;
+
+        try (BufferedReader reader = new BufferedReader(new FileReader("emprestimos.txt"))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String[] parts = line.split(";");
+                if (parts.length == 4 && parts[0].equals(idUsuario) && !parts[3].equalsIgnoreCase("Devolvido")) {
+                    // Verifique se o empréstimo é associado ao usuário e se não foi devolvido.
+                    emprestimosAtuais++;
+                }
+            }
+        } catch (IOException e) {
+            System.err.println("Erro ao ler o arquivo emprestimos.txt: " + e.getMessage());
+        }
+
+        return emprestimosAtuais;
+    }
+
+    public void diminuirQuantidadeLivros(String tituloItem) {
+        try {  
+            // Defina o nome do arquivo
+            String arquivo = "livros.txt";
+
+            // Crie uma lista para armazenar as linhas do arquivo
+            List<String> linhas = new ArrayList<>();
+
+            // Abra o arquivo para leitura
+            BufferedReader br = new BufferedReader(new FileReader(arquivo));
+            String linha;
+
+            // Leia as linhas do arquivo e armazene na lista
+            while ((linha = br.readLine()) != null) {
+                linhas.add(linha);
+            }
+            br.close();
+
+            // Procurar o livro pelo título e decrementar a quantidade
+            for (int i = 0; i < linhas.size(); i++) {
+                String[] partes = linhas.get(i).split(";");
+                String livroTitulo = partes[0];
+
+                if (livroTitulo.equals(tituloItem)) {
+                    int quantidade = Integer.parseInt(partes[3]);
+                    if (quantidade > 0) {
+                        quantidade--; // Decrementa a quantidade
+                        partes[3] = Integer.toString(quantidade);
+                        linhas.set(i, String.join(";", partes));
+                    } else {
+                        System.out.println("Não há mais cópias disponíveis deste livro.");
+                        return;
+                    }
+                }
+            }
+
+            // Abra o arquivo para escrita
+            BufferedWriter bw = new BufferedWriter(new FileWriter(arquivo));
+
+            // Escreva as linhas atualizadas de volta no arquivo
+            for (String linhaAtualizada : linhas) {
+                bw.write(linhaAtualizada);
+                bw.newLine();
+            }
+            bw.close();
+
+        } catch (IOException e) {
+            System.err.println("Erro ao diminuir a quantidade de livros: " + e.getMessage());
+        }
+    }
+
+    public void diminuirQuantidadeCD(String tituloItem) {
+        try {
+            // Defina o nome do arquivo
+            String arquivo = "cds.txt";
+
+            // Crie uma lista para armazenar as linhas do arquivo
+            List<String> linhas = new ArrayList<>();
+
+            // Abra o arquivo para leitura
+            BufferedReader br = new BufferedReader(new FileReader(arquivo));
+            String linha;
+
+            // Leia as linhas do arquivo e armazene na lista
+            while ((linha = br.readLine()) != null) {
+                linhas.add(linha);
+            }
+            br.close();
+
+            // Procurar o CD pelo título e decrementar a quantidade
+            for (int i = 0; i < linhas.size(); i++) {
+                String[] partes = linhas.get(i).split(";");
+                String cdTitulo = partes[0];
+
+                if (cdTitulo.equals(tituloItem)) {
+                    int quantidade = Integer.parseInt(partes[3]);
+                    if (quantidade > 0) {
+                        quantidade--; // Decrementa a quantidade
+                        partes[3] = Integer.toString(quantidade);
+                        linhas.set(i, String.join(";", partes));
+                    } else {
+                        System.out.println("Não há mais cópias disponíveis deste CD.");
+                        return;
+                    }
+                }
+            }
+
+            // Abra o arquivo para escrita
+            BufferedWriter bw = new BufferedWriter(new FileWriter(arquivo));
+
+            // Escreva as linhas atualizadas de volta no arquivo
+            for (String linhaAtualizada : linhas) {
+                bw.write(linhaAtualizada);
+                bw.newLine();
+            }
+            bw.close();
+
+        } catch (IOException e) {
+            System.err.println("Erro ao diminuir a quantidade de CDs: " + e.getMessage());
+        }
+    }
+
+    public void diminuirQuantidadeDVD(String tituloItem) {
+        try {
+            // Defina o nome do arquivo
+            String arquivo = "dvds.txt";
+
+            // Crie uma lista para armazenar as linhas do arquivo
+            List<String> linhas = new ArrayList<>();
+
+            // Abra o arquivo para leitura
+            BufferedReader br = new BufferedReader(new FileReader(arquivo));
+            String linha;
+
+            // Leia as linhas do arquivo e armazene na lista
+            while ((linha = br.readLine()) != null) {
+                linhas.add(linha);
+            }
+            br.close();
+
+            // Procurar o DVD pelo título e decrementar a quantidade
+            for (int i = 0; i < linhas.size(); i++) {
+                String[] partes = linhas.get(i).split(";");
+                String dvdTitulo = partes[0];
+
+                if (dvdTitulo.equals(tituloItem)) {
+                    int quantidade = Integer.parseInt(partes[3]);
+                    if (quantidade > 0) {
+                        quantidade--; // Decrementa a quantidade
+                        partes[3] = Integer.toString(quantidade);
+                        linhas.set(i, String.join(";", partes));
+                    } else {
+                        System.out.println("Não há mais cópias disponíveis deste DVD.");
+                        return;
+                    }
+                }
+            }
+
+            // Abra o arquivo para escrita
+            BufferedWriter bw = new BufferedWriter(new FileWriter(arquivo));
+
+            // Escreva as linhas atualizadas de volta no arquivo
+            for (String linhaAtualizada : linhas) {
+                bw.write(linhaAtualizada);
+                bw.newLine();
+            }
+            bw.close();
+
+        } catch (IOException e) {
+            System.err.println("Erro ao diminuir a quantidade de DVDs: " + e.getMessage());
+        }
+    }
+
+    public void devolver() {
+        try (Scanner scanner = new Scanner(System.in)) {
+            System.out.print("Digite o ID do usuário: ");
+            String idUsuario = scanner.nextLine();
+
+            System.out.print("Digite o título do item a ser devolvido: ");
+            String tituloItem = scanner.nextLine();
+
+            System.out.print("Digite o tipo do item (Livro, CD ou DVD): ");
+            String tipoItem = scanner.nextLine();
+
+            boolean emprestimoEncontrado = false;
+
+            try {
+                File emprestimosFile = new File("emprestimos.txt");
+                File tempFile = new File("temp_emprestimos.txt");
+
+                BufferedReader reader = new BufferedReader(new FileReader(emprestimosFile));
+                BufferedWriter writer = new BufferedWriter(new FileWriter(tempFile));
+
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    String[] parts = line.split(";");
+                    if (parts.length == 4 && parts[0].equals(idUsuario) && parts[2].equalsIgnoreCase(tituloItem)) {
+                        if (parts[3].equalsIgnoreCase("Pendente")) {
+                            parts[3] = "Devolvido";
+                            emprestimoEncontrado = true;
+                            System.out.println("Item devolvido com sucesso!");
+                        } else {
+                            System.out.println("Este item já foi devolvido ou não está pendente de devolução.");
+                        }
+                    }
+                    writer.write(String.join(";", parts));
+                    writer.newLine();
+                }
+
+                // Registrar o empréstimo com base no tipo do item
+                if (tipoItem.equalsIgnoreCase("Livro")) {
+                    aumentarQuantidadeLivros(tituloItem);
+                } else if (tipoItem.equalsIgnoreCase("CD")) {
+                    aumentarQuantidadeCD(tituloItem);
+                } else if (tipoItem.equalsIgnoreCase("DVD")) {
+                    aumentarQuantidadeDVD(tituloItem);
+                } else {
+                    System.out.println("Tipo de item inválido. Use 'Livro', 'CD' ou 'DVD'.");
+                }
+
+                reader.close();
+                writer.close();
+
+                // Exclui o arquivo original.
+                if (emprestimosFile.delete()) {
+                    // Renomeia o arquivo temporário para o nome original.
+                    if (!tempFile.renameTo(emprestimosFile)) {
+                        System.err.println("Erro ao renomear o arquivo temporário.");
+                    }
+                } else {
+                    System.err.println("Erro ao excluir o arquivo original.");
+                }
+
+                if (!emprestimoEncontrado) {
+                    System.out.println("Nenhum empréstimo pendente encontrado para este usuário e item.");
+                }
+            } catch (IOException e) {
+                System.err.println("Erro ao processar o arquivo de empréstimos: " + e.getMessage());
+            }
+            scanner.close();
+        }
+    }
+
+    public void aumentarQuantidadeLivros(String tituloItem) {
+        try {
+            // Defina o nome do arquivo
+            String arquivo = "livros.txt";
+
+            // Crie uma lista para armazenar as linhas do arquivo
+            List<String> linhas = new ArrayList<>();
+
+            // Abra o arquivo para leitura
+            BufferedReader br = new BufferedReader(new FileReader(arquivo));
+            String linha;
+
+            // Leia as linhas do arquivo e armazene na lista
+            while ((linha = br.readLine()) != null) {
+                linhas.add(linha);
+            }
+            br.close();
+
+            // Procurar o livro pelo título e decrementar a quantidade
+            for (int i = 0; i < linhas.size(); i++) {
+                String[] partes = linhas.get(i).split(";");
+                String livroTitulo = partes[0];
+
+                if (livroTitulo.equals(tituloItem)) {
+                    int quantidade = Integer.parseInt(partes[3]);
+                    if (quantidade > 0) {
+                        quantidade++; // Decrementa a quantidade
+                        partes[3] = Integer.toString(quantidade);
+                        linhas.set(i, String.join(";", partes));
+                    } else {
+                        System.out.println("Não há mais cópias disponíveis deste livro.");
+                        return;
+                    }
+                }
+            }
+
+            // Abra o arquivo para escrita
+            BufferedWriter bw = new BufferedWriter(new FileWriter(arquivo));
+
+            // Escreva as linhas atualizadas de volta no arquivo
+            for (String linhaAtualizada : linhas) {
+                bw.write(linhaAtualizada);
+                bw.newLine();
+            }
+            bw.close();
+
+        } catch (IOException e) {
+            System.err.println("Erro ao diminuir a quantidade de livros: " + e.getMessage());
+        }
+    }
+
+    public void aumentarQuantidadeCD(String tituloItem) {
+        try {
+            // Defina o nome do arquivo
+            String arquivo = "cds.txt";
+
+            // Crie uma lista para armazenar as linhas do arquivo
+            List<String> linhas = new ArrayList<>();
+
+            // Abra o arquivo para leitura
+            BufferedReader br = new BufferedReader(new FileReader(arquivo));
+            String linha;
+
+            // Leia as linhas do arquivo e armazene na lista
+            while ((linha = br.readLine()) != null) {
+                linhas.add(linha);
+            }
+            br.close();
+
+            // Procurar o CD pelo título e decrementar a quantidade
+            for (int i = 0; i < linhas.size(); i++) {
+                String[] partes = linhas.get(i).split(";");
+                String cdTitulo = partes[0];
+
+                if (cdTitulo.equals(tituloItem)) {
+                    int quantidade = Integer.parseInt(partes[3]);
+                    if (quantidade > 0) {
+                        quantidade++; // Decrementa a quantidade
+                        partes[3] = Integer.toString(quantidade);
+                        linhas.set(i, String.join(";", partes));
+                    } else {
+                        System.out.println("Não há mais cópias disponíveis deste CD.");
+                        return;
+                    }
+                }
+            }
+
+            // Abra o arquivo para escrita
+            BufferedWriter bw = new BufferedWriter(new FileWriter(arquivo));
+
+            // Escreva as linhas atualizadas de volta no arquivo
+            for (String linhaAtualizada : linhas) {
+                bw.write(linhaAtualizada);
+                bw.newLine();
+            }
+            bw.close();
+
+        } catch (IOException e) {
+            System.err.println("Erro ao diminuir a quantidade de CDs: " + e.getMessage());
+        }
+    }
+
+    public void aumentarQuantidadeDVD(String tituloItem) {
+        try {
+            // Defina o nome do arquivo
+            String arquivo = "dvds.txt";
+
+            // Crie uma lista para armazenar as linhas do arquivo
+            List<String> linhas = new ArrayList<>();
+
+            // Abra o arquivo para leitura
+            BufferedReader br = new BufferedReader(new FileReader(arquivo));
+            String linha;
+
+            // Leia as linhas do arquivo e armazene na lista
+            while ((linha = br.readLine()) != null) {
+                linhas.add(linha);
+            }
+            br.close();
+
+            // Procurar o DVD pelo título e decrementar a quantidade
+            for (int i = 0; i < linhas.size(); i++) {
+                String[] partes = linhas.get(i).split(";");
+                String dvdTitulo = partes[0];
+
+                if (dvdTitulo.equals(tituloItem)) {
+                    int quantidade = Integer.parseInt(partes[3]);
+                    if (quantidade > 0) {
+                        quantidade++; // Decrementa a quantidade
+                        partes[3] = Integer.toString(quantidade);
+                        linhas.set(i, String.join(";", partes));
+                    } else {
+                        System.out.println("Não há mais cópias disponíveis deste DVD.");
+                        return;
+                    }
+                }
+            }
+
+            // Abra o arquivo para escrita
+            BufferedWriter bw = new BufferedWriter(new FileWriter(arquivo));
+
+            // Escreva as linhas atualizadas de volta no arquivo
+            for (String linhaAtualizada : linhas) {
+                bw.write(linhaAtualizada);
+                bw.newLine();
+            }
+            bw.close();
+
+        } catch (IOException e) {
+            System.err.println("Erro ao diminuir a quantidade de DVDs: " + e.getMessage());
+        }
+    }
+
+    public void gerarRelatorioEmprestimos() {
+        try (BufferedReader readerEmprestimos = new BufferedReader(new FileReader("emprestimos.txt"));
+                BufferedReader readerLivros = new BufferedReader(new FileReader("livros.txt"));
+                BufferedReader readerCDs = new BufferedReader(new FileReader("cds.txt"));
+                BufferedReader readerDVDs = new BufferedReader(new FileReader("dvds.txt"))) {
+
+            Map<String, Integer> emprestimosPorTitulo = new HashMap<>();
+            String linha;
+
+            while ((linha = readerEmprestimos.readLine()) != null) {
+                String[] partes = linha.split(";");
+                if (partes.length == 4) {
+                    String titulo = partes[2];
+                    emprestimosPorTitulo.put(titulo, emprestimosPorTitulo.getOrDefault(titulo, 0) + 1);
+                }
+            }
+
+            Map<String, Integer> anoPublicacaoPorTitulo = new HashMap();
+            carregarAnoPublicacao(readerLivros, anoPublicacaoPorTitulo);
+            carregarAnoPublicacao(readerCDs, anoPublicacaoPorTitulo);
+            carregarAnoPublicacao(readerDVDs, anoPublicacaoPorTitulo);
+
+            // Classificar o mapa por ano de publicação
+            Map<String, Integer> relatorioOrdenado = emprestimosPorTitulo.entrySet().stream()
+                    .sorted((e1, e2) -> {
+                        int ano1 = anoPublicacaoPorTitulo.getOrDefault(e1.getKey(), 0);
+                        int ano2 = anoPublicacaoPorTitulo.getOrDefault(e2.getKey(), 0);
+                        return Integer.compare(ano1, ano2);
+                    })
+                    .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (e1, e2) -> e1,
+                            LinkedHashMap::new));
+
+            // Iterar sobre o mapa e imprimir o relatório
+            for (Map.Entry<String, Integer> entry : relatorioOrdenado.entrySet()) {
+                String titulo = entry.getKey();
+                int quantidadeEmprestimos = entry.getValue();
+                System.out.println(titulo + ": Emprestado " + quantidadeEmprestimos + " vezes");
+            }
+        } catch (IOException e) {
+            System.err.println("Erro ao gerar relatório de empréstimos: " + e.getMessage());
+        }
+    }
+
+    private void carregarAnoPublicacao(BufferedReader reader, Map<String, Integer> mapaAnoPublicacao)
+            throws IOException {
+        String linha;
+        while ((linha = reader.readLine()) != null) {
+            String[] partes = linha.split(";");
+            if (partes.length == 4) {
+                String titulo = partes[0];
+                int anoPublicacao = Integer.parseInt(partes[2]);
+                mapaAnoPublicacao.put(titulo, anoPublicacao);
+            }
+        }
+    }
+
+    public void gerarRelatorioEmprestimosPorUsuario() {
+        Scanner scanner = new Scanner(System.in);
+        System.out.print("Digite o ID do usuário que deseja consultar: ");
+        String idUsuarioConsulta = scanner.nextLine();
+
+        try (BufferedReader readerEmprestimos = new BufferedReader(new FileReader("emprestimos.txt"))) {
+            Map<String, List<String>> emprestimosPorUsuario = new HashMap<>();
+            String linha;
+
+            while ((linha = readerEmprestimos.readLine()) != null) {
+                String[] partes = linha.split(";");
+                String idUsuario = partes[0];
+                String tituloItem = partes[2];
+                if (idUsuario.equals(idUsuarioConsulta)) {
+                    emprestimosPorUsuario.computeIfAbsent(idUsuario, k -> new ArrayList<>()).add(tituloItem);
+                }
+            }
+
+            if (emprestimosPorUsuario.isEmpty()) {
+                System.out.println("Nenhum empréstimo encontrado para o usuário com ID " + idUsuarioConsulta);
+            } else {
+                // Classificar a lista de itens em ordem alfabética para o usuário consultado
+                emprestimosPorUsuario.forEach((idUsuario, emprestimos) -> {
+                    Collections.sort(emprestimos);
+                });
+
+                // Imprimir o relatório para o usuário consultado
+                System.out.println("Empréstimos para o usuário ID " + idUsuarioConsulta + ":");
+                for (String tituloItem : emprestimosPorUsuario.get(idUsuarioConsulta)) {
+                    System.out.println("- " + tituloItem);
+                }
+            }
+        } catch (IOException e) {
+            System.err.println("Erro ao gerar relatório de empréstimos por usuário: " + e.getMessage());
+        } finally {
+            scanner.close();
+        }
+    }
+
+}
