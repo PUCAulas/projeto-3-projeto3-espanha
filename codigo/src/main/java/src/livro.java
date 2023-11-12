@@ -1,7 +1,7 @@
 package src;
-public class livro extends itemBiblioteca {
+public class Livro extends ItemBiblioteca {
 
-    public livro(String titulo, String autor, int anoPublicacao, int exemplaresDisponiveis) {
+    public Livro(String titulo, String autor, int anoPublicacao, int exemplaresDisponiveis) {
         super(titulo, autor, anoPublicacao, exemplaresDisponiveis);
     }
 

@@ -1,11 +1,11 @@
 package src;
 
-public class usuario {
+public class Usuario {
     private String nome;
     private String cpf;
     private int id;
 
-    public usuario(String nome, String cpf, int id) {
+    public Usuario(String nome, String cpf, int id) {
         this.nome = nome;
         this.cpf = cpf;
         this.id = id;

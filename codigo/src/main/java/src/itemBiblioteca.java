@@ -1,11 +1,11 @@
 package src;
-public abstract class itemBiblioteca {
+public abstract class ItemBiblioteca {
     private String titulo;
     private String autor;
     private int anoPublicacao;
     private int exemplaresDisponiveis;
 
-    public itemBiblioteca(String titulo, String autor, int anoPublicacao, int exemplaresDisponiveis) {
+    public ItemBiblioteca(String titulo, String autor, int anoPublicacao, int exemplaresDisponiveis) {
         this.titulo = titulo;
         this.autor = autor;
         this.anoPublicacao = anoPublicacao;

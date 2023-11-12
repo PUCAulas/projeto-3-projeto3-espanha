@@ -1,7 +1,7 @@
 package src;
-public class dvd extends itemBiblioteca {
+public class Dvd extends ItemBiblioteca {
 
-    public dvd(String titulo, String autor, int anoPublicacao, int exemplaresDisponiveis) {
+    public Dvd(String titulo, String autor, int anoPublicacao, int exemplaresDisponiveis) {
         super(titulo, autor, anoPublicacao, exemplaresDisponiveis);
     }
 
