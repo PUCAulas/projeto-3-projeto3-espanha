@@ -855,8 +855,7 @@ public class Biblioteca implements Emprestimo {
             System.err.println("Erro ao editar o DVD: " + e.getMessage());
         }
     }
-    
-}
+
 
   public void emprestar() {
         Scanner scanner = new Scanner(System.in);
@@ -1502,5 +1501,5 @@ public class Biblioteca implements Emprestimo {
             scanner.close();
         }
     }
+     }
 
-}
