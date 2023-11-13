@@ -1,0 +1,6 @@
+1;01/11/2023;Livro 1;Devolvido
+1;20/10/2023;Livro 2;Pendente
+1;01/11/2023;Livro 3;Pendente
+2;05/11/2023;DVD 1;Pendente
+2;05/11/2023;DVD 2;Pendente
+2;05/11/2023;DVD 3;Pendente
